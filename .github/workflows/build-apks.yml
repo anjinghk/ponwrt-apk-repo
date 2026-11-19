@@ -1,0 +1,92 @@
+name: 编译 PonWrt 可选插件 apk 包
+
+# 手动触发。用 ponwrt 源码 + feeds 编译 AdGuard Home / Tailscale /
+# WireGuard / Lucky 的 aarch64_cortex-a53 apk 包（含依赖与中文），
+# 结果打包发到本仓库的 Release。固件本身不变。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ponwrt-apk-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 480
+    steps:
+      - name: 检出本仓库
+        uses: actions/checkout@v4
+
+      - name: 释放磁盘空间
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
+                      /usr/local/.ghcup || true
+          sudo apt-get clean
+          df -h
+
+      - name: 安装编译依赖
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+            bzip2 ccache clang cmake cpio curl device-tree-compiler ecj fastjar flex gawk \
+            gettext gcc-multilib g++-multilib git libgnutls28-dev gperf haveged help2man \
+            intltool lib32gcc-s1 libc6-dev-i386 libelf-dev libglib2.0-dev libgmp-dev \
+            libltdl-dev libmpc-dev libmpfr-dev libncurses-dev libpython3-dev \
+            libreadline-dev libssl-dev libtool libyaml-dev zlib1g-dev lld llvm lrzsz \
+            genisoimage msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 \
+            python3-pip python3-ply python3-docutils python3-pyelftools qemu-utils re2c \
+            rsync scons squashfs-tools subversion swig texinfo node-uglify upx-ucl unzip \
+            vim wget xmlto xxd zstd
+          echo "依赖安装完成"
+
+      - name: 克隆 ponwrt 主线
+        run: |
+          git clone --depth 1 https://github.com/pbs05/ponwrt.git ponwrt
+          git -C ponwrt log -1 --format='PonWrt 源码: %h %s'
+
+      - name: 编译 apk 包
+        working-directory: ponwrt
+        env:
+          JOBS: '2'
+        run: |
+          bash "$GITHUB_WORKSPACE/build-apks.sh" .
+          if [ ! -d "$GITHUB_WORKSPACE/out" ] || [ -z "$(ls -A "$GITHUB_WORKSPACE/out")" ]; then
+            echo "::error::未生成任何 apk 包"; exit 1
+          fi
+
+      - name: 打包
+        run: |
+          cd "$GITHUB_WORKSPACE/out"
+          tar -czf "$GITHUB_WORKSPACE/ponwrt-apk-aarch64_cortex-a53.tar.gz" .
+          cd "$GITHUB_WORKSPACE"
+          ls -lh ponwrt-apk-aarch64_cortex-a53.tar.gz
+          echo "PKG_COUNT=$(find out -name '*.apk' | wc -l)" >> "$GITHUB_ENV"
+
+      - name: 发布到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-aarch64_cortex-a53
+          name: PonWrt 可选插件 apk（aarch64_cortex-a53）
+          body: |
+            用 pbs05/ponwrt 同源码编译的 aarch64_cortex-a53 apk 包，含全部依赖与中文语言包。
+            适用于 Nokia XG-040G-MD 等 AN7581 设备（PonWrt 用 apk 包管理器）。
+
+            包含插件：AdGuard Home、Tailscale、WireGuard、Lucky（含反代/DDNS）。
+            共 ${{ env.PKG_COUNT }} 个 apk 文件。
+
+            ## 安装
+            解压后把 apk 上传到路由器 /tmp，SSH 执行：
+            ```
+            cd /tmp
+            apk add --allow-untrusted ./*.apk
+            ```
+            网页「系统-软件包」直接上传第三方包会报 UNTRUSTED，请用上面的 SSH 命令。
+            装完执行 `/etc/init.d/rpcd reload && /etc/init.d/uhttpd reload` 刷新界面。
+          files: ponwrt-apk-aarch64_cortex-a53.tar.gz
+          fail_on_unmatched_files: true
