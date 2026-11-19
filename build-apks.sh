@@ -41,6 +41,7 @@ PY
 cat >> .config <<'EOF'
 CONFIG_PACKAGE_adguardhome=y
 CONFIG_PACKAGE_luci-app-adguardhome=y
+CONFIG_PACKAGE_luci-i18n-adguardhome-zh-cn=y
 CONFIG_PACKAGE_tailscale=y
 CONFIG_PACKAGE_luci-app-tailscale-community=y
 CONFIG_PACKAGE_luci-i18n-tailscale-community-zh-cn=y
@@ -53,14 +54,33 @@ EOF
 make defconfig
 
 echo "==> [3/5] 确认目标包已被选中（应全部 =y）"
-grep -E '^CONFIG_PACKAGE_(adguardhome|luci-app-adguardhome|tailscale|luci-app-tailscale-community|luci-i18n-tailscale-community-zh-cn|luci-proto-wireguard|wireguard-tools|lucky|luci-app-lucky|luci-i18n-lucky-zh-cn)=y' .config || true
+grep -E '^CONFIG_PACKAGE_(adguardhome|luci-app-adguardhome|luci-i18n-adguardhome-zh-cn|tailscale|luci-app-tailscale-community|luci-i18n-tailscale-community-zh-cn|luci-proto-wireguard|wireguard-tools|lucky|luci-app-lucky|luci-i18n-lucky-zh-cn)=y' .config || true
 
-echo "==> [4/5] 下载源码包并编译"
+echo "==> [4/5] 下载源码包并编译（只编译包，跳过固件镜像与目标安装）"
 make -j"$JOBS" download
-make -j"$JOBS"
+# 关键：不能裸跑 make（=world），world 末尾会跑 json_overview_image_info 生成镜像信息；
+# 我们已关掉所有 device，没有镜像，那一步必然失败。只跑包编译+安装即可产出 apk。
+make -j"$JOBS" package/compile
+make -j"$JOBS" package/install
 
 echo "==> [5/5] 收集所有生成的 apk（主包 + 依赖 + 中文）"
 mkdir -p "$SELF/out"
 find bin/packages -type f -name '*.apk' -exec cp -v {} "$SELF/out/" \;
-echo "共收集 $(find "$SELF/out" -name '*.apk' | wc -l) 个 apk 到 $SELF/out/"
-ls -lh "$SELF/out/" | head -40
+CNT=$(find "$SELF/out" -name '*.apk' | wc -l)
+echo "共收集 $CNT 个 apk 到 $SELF/out/"
+if [ "$CNT" -eq 0 ]; then
+    echo "错误：bin/packages 下没有生成任何 apk" >&2
+    exit 1
+fi
+echo "=== 确认目标包与中文包都在 ==="
+for key in adguardhome luci-app-adguardhome luci-i18n-adguardhome-zh-cn \
+           tailscale luci-app-tailscale-community luci-i18n-tailscale-community-zh-cn \
+           wireguard-tools luci-proto-wireguard \
+           lucky luci-app-lucky luci-i18n-lucky-zh-cn; do
+    if ls "$SELF/out/${key}"-*.apk >/dev/null 2>&1; then
+        echo "  OK   $key"
+    else
+        echo "  缺失 $key"
+    fi
+done
+ls -lh "$SELF/out/" | head -60
