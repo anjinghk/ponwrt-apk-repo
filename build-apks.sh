@@ -13,11 +13,15 @@ JOBS="${JOBS:-2}"
 cd "$SRC"
 [ -x scripts/feeds ] || { echo "错误：$SRC 不是 ponwrt 源码根目录" >&2; exit 1; }
 
-echo "==> [1/5] 配置 feeds（ponwrt 官方 7 源 + lucky 第三方源）"
+echo "==> [1/5] 配置 feeds（ponwrt 官方源 + lucky + istore 第三方源）"
 cp feeds.conf.default feeds.conf
 # lucky 源（提供 lucky 主程序 + luci-app-lucky + 中文包），用 aarch64 预编译核心
 if ! grep -q '^src-git lucky ' feeds.conf; then
     echo 'src-git lucky https://github.com/gdy666/luci-app-lucky.git' >> feeds.conf
+fi
+# istore 源（只取 luci-app-store 商店本体，不装 iStore 其它应用）
+if ! grep -q '^src-git istore ' feeds.conf; then
+    echo 'src-git istore https://github.com/linkease/istore.git;main' >> feeds.conf
 fi
 ./scripts/feeds update -a
 ./scripts/feeds install -a
@@ -50,18 +54,24 @@ CONFIG_PACKAGE_wireguard-tools=y
 CONFIG_PACKAGE_lucky=y
 CONFIG_PACKAGE_luci-app-lucky=y
 CONFIG_PACKAGE_luci-i18n-lucky-zh-cn=y
+# iStore 商店本体（defconfig 会自动带出必要依赖 luci-lib-taskd/taskd，
+# 不选取 DDNSTO、易有云等 iStore 其它应用）
+CONFIG_PACKAGE_luci-app-store=y
+# omcproxy：IGMPv3/MLDv2 组播代理（ponwrt 主线自带）
+CONFIG_PACKAGE_omcproxy=y
 EOF
 make defconfig
 
 echo "==> [3/5] 确认目标包已被选中（应全部 =y）"
-grep -E '^CONFIG_PACKAGE_(adguardhome|luci-app-adguardhome|luci-i18n-adguardhome-zh-cn|tailscale|luci-app-tailscale-community|luci-i18n-tailscale-community-zh-cn|luci-proto-wireguard|wireguard-tools|lucky|luci-app-lucky|luci-i18n-lucky-zh-cn)=y' .config || true
+grep -E '^CONFIG_PACKAGE_(adguardhome|luci-app-adguardhome|luci-i18n-adguardhome-zh-cn|tailscale|luci-app-tailscale-community|luci-i18n-tailscale-community-zh-cn|luci-proto-wireguard|wireguard-tools|lucky|luci-app-lucky|luci-i18n-lucky-zh-cn|luci-app-store|omcproxy)=y' .config || true
 
-echo "==> [4/5] 下载源码包并编译（只编译包，跳过固件镜像与目标安装）"
+echo "==> [4/5] 下载源码包并完整编译"
 make -j"$JOBS" download
-# 关键：不能裸跑 make（=world），world 末尾会跑 json_overview_image_info 生成镜像信息；
-# 我们已关掉所有 device，没有镜像，那一步必然失败。只跑包编译+安装即可产出 apk。
-make -j"$JOBS" package/compile
-make -j"$JOBS" package/install
+# 必须跑完整 world：它会先编译工具链和 host 工具（lua 等），只跑 package/compile
+# 会因 host 工具缺失而失败。world 末尾的 json_overview_image_info 需要 device/profile
+# 生成镜像信息，而我们已关掉所有 device，这一步必然失败——但此时所有 apk 已生成到
+# bin/packages，因此容忍这最后一步失败，靠下面的包齐全性检查兜底。
+make -j"$JOBS" || echo "==> 注意：world 末尾镜像信息步骤预期失败（未选 device），apk 应已生成，继续检查"
 
 echo "==> [5/5] 收集所有生成的 apk（主包 + 依赖 + 中文）"
 mkdir -p "$SELF/out"
@@ -76,7 +86,8 @@ echo "=== 确认目标包与中文包都在 ==="
 for key in adguardhome luci-app-adguardhome luci-i18n-adguardhome-zh-cn \
            tailscale luci-app-tailscale-community luci-i18n-tailscale-community-zh-cn \
            wireguard-tools luci-proto-wireguard \
-           lucky luci-app-lucky luci-i18n-lucky-zh-cn; do
+           lucky luci-app-lucky luci-i18n-lucky-zh-cn \
+           omcproxy luci-app-store luci-lib-taskd luci-lib-xterm taskd; do
     if ls "$SELF/out/${key}"-*.apk >/dev/null 2>&1; then
         echo "  OK   $key"
     else
