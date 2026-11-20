@@ -13,16 +13,14 @@ JOBS="${JOBS:-2}"
 cd "$SRC"
 [ -x scripts/feeds ] || { echo "错误：$SRC 不是 ponwrt 源码根目录" >&2; exit 1; }
 
-echo "==> [1/5] 配置 feeds（ponwrt 官方源 + lucky + istore 第三方源）"
+echo "==> [1/5] 配置 feeds（ponwrt 官方源 + lucky 第三方源）"
 cp feeds.conf.default feeds.conf
 # lucky 源（提供 lucky 主程序 + luci-app-lucky + 中文包），用 aarch64 预编译核心
 if ! grep -q '^src-git lucky ' feeds.conf; then
     echo 'src-git lucky https://github.com/gdy666/luci-app-lucky.git' >> feeds.conf
 fi
-# istore 源（只取 luci-app-store 商店本体，不装 iStore 其它应用）
-if ! grep -q '^src-git istore ' feeds.conf; then
-    echo 'src-git istore https://github.com/linkease/istore.git;main' >> feeds.conf
-fi
+# 注：iStore 商店（luci-app-store）依赖 libuci-lua / mount-utils 等包，
+# ponwrt 主线源码树不含这些依赖，defconfig 会剔除它，故暂不纳入编译。
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 
@@ -54,9 +52,6 @@ CONFIG_PACKAGE_wireguard-tools=y
 CONFIG_PACKAGE_lucky=y
 CONFIG_PACKAGE_luci-app-lucky=y
 CONFIG_PACKAGE_luci-i18n-lucky-zh-cn=y
-# iStore 商店本体（defconfig 会自动带出必要依赖 luci-lib-taskd/taskd，
-# 不选取 DDNSTO、易有云等 iStore 其它应用）
-CONFIG_PACKAGE_luci-app-store=y
 # omcproxy：IGMPv3/MLDv2 组播代理（ponwrt 主线自带）+ LuCI 界面 + 中文包
 CONFIG_PACKAGE_omcproxy=y
 CONFIG_PACKAGE_luci-app-omcproxy=y
@@ -65,7 +60,7 @@ EOF
 make defconfig
 
 echo "==> [3/5] 确认目标包已被选中（应全部 =y）"
-grep -E '^CONFIG_PACKAGE_(adguardhome|luci-app-adguardhome|luci-i18n-adguardhome-zh-cn|tailscale|luci-app-tailscale-community|luci-i18n-tailscale-community-zh-cn|luci-proto-wireguard|wireguard-tools|lucky|luci-app-lucky|luci-i18n-lucky-zh-cn|luci-app-store|omcproxy|luci-app-omcproxy|luci-i18n-omcproxy-zh-cn)=y' .config || true
+grep -E '^CONFIG_PACKAGE_(adguardhome|luci-app-adguardhome|luci-i18n-adguardhome-zh-cn|tailscale|luci-app-tailscale-community|luci-i18n-tailscale-community-zh-cn|luci-proto-wireguard|wireguard-tools|lucky|luci-app-lucky|luci-i18n-lucky-zh-cn|omcproxy|luci-app-omcproxy|luci-i18n-omcproxy-zh-cn)=y' .config || true
 
 echo "==> [4/5] 下载源码包并完整编译"
 make -j"$JOBS" download
@@ -84,17 +79,25 @@ if [ "$CNT" -eq 0 ]; then
     echo "错误：bin/packages 下没有生成任何 apk" >&2
     exit 1
 fi
-echo "=== 确认目标包与中文包都在 ==="
+echo "=== 确认目标包与中文包都在（缺任何一个则失败退出，避免产出残缺包）==="
+MISS=0
 for key in adguardhome luci-app-adguardhome luci-i18n-adguardhome-zh-cn \
            tailscale luci-app-tailscale-community luci-i18n-tailscale-community-zh-cn \
            wireguard-tools luci-proto-wireguard \
            lucky luci-app-lucky luci-i18n-lucky-zh-cn \
-           omcproxy luci-app-omcproxy luci-i18n-omcproxy-zh-cn \
-           luci-app-store luci-lib-taskd luci-lib-xterm taskd; do
+           omcproxy luci-app-omcproxy luci-i18n-omcproxy-zh-cn; do
     if ls "$SELF/out/${key}"-*.apk >/dev/null 2>&1; then
         echo "  OK   $key"
     else
         echo "  缺失 $key"
+        MISS=$((MISS+1))
     fi
 done
-ls -lh "$SELF/out/" | head -60
+# 注意：不能用 `ls ... | head`，head 读满提前关闭管道会让 ls 收到 SIGPIPE，
+# 在 set -o pipefail 下导致整个脚本失败、后续打包发布被跳过（第4轮的坑）。
+for f in "$SELF/out/"*.apk; do du -h "$f"; done | sort -h | tail -60
+if [ "$MISS" -gt 0 ]; then
+    echo "错误：有 $MISS 个目标包缺失，终止以免发布残缺包" >&2
+    exit 1
+fi
+echo "全部 14 个目标包齐全 ✓"

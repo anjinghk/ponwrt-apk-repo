@@ -18,8 +18,9 @@
 | Tailscale | WireGuard 组网的异地组网工具 | ✅ luci 中文包 |
 | WireGuard | 高性能 VPN | LuCI 协议界面自带中文 |
 | Lucky（大吉） | 反向代理、DDNS、IPv6 转发等 | ✅ 中文包 |
-| iStore 商店 | 图形化应用商店（仅商店本体，不含其它 iStore 应用） | ✅ 界面自带中文 |
 | omcproxy | IGMPv3 / MLDv2 组播代理（轻量级，比 igmpproxy 更稳） | ✅ LuCI 界面 + 中文包 |
+
+> **关于 iStore 商店**：`luci-app-store` 依赖 `libuci-lua`、`mount-utils` 等包，而 ponwrt 主线源码树不含这些依赖，`make defconfig` 会把它剔除，因此**暂时无法随本仓库编译**。如需商店，建议在路由器上单独安装（iStore 有自己的一键安装脚本），与本 apk 包仓库无关。
 
 ## 怎么安装
 
@@ -47,7 +48,7 @@ Release 里的压缩包包含编译产出的**全部 apk**（目标插件 + 自�
 
 点本仓库 Actions 里的「编译 PonWrt 可选插件 apk 包」→「Run workflow」即可。流程：
 
-1. 拉取 `pbs05/ponwrt` 主线 + 官方 feeds + lucky / istore 第三方源；
+1. 拉取 `pbs05/ponwrt` 主线 + 官方 feeds + lucky 第三方源；
 2. 基于 `configs/an7581.config` 生成最小 `.config`，只选这几个插件，`make defconfig` 自动解析依赖；
 3. `make` 编译后收集 `bin/packages/aarch64_cortex-a53/` 下全部 apk；
 4. 打包发布到 Release。
@@ -59,5 +60,4 @@ Release 里的压缩包包含编译产出的**全部 apk**（目标插件 + 自�
 - 包由 25.12 阶段的 ponwrt 源码编译。若你的固件源码版本相差很大，个别依赖可能有版本差异；以实际安装结果为准。
 - 安装第三方插件后如出现问题，可 `apk del <包名>` 卸载。
 - Lucky 的预编译核心来自 `gdy666/luci-app-lucky`，按 `aarch64` 自动选 `arm64` 版本，与本机架构匹配。
-- iStore 商店来自 `linkease/istore`，只编译 `luci-app-store` 本体及其必需依赖（luci-lib-taskd / luci-lib-xterm / taskd），**不含** DDNSTO、易有云等其它 iStore 应用。商店装好后需在 LuCI 里出现「iStore」菜单才能用。
 - omcproxy 主程序来自 ponwrt 主线自带包（`package/network/services/omcproxy`），LuCI 界面与中文包来自 `immortalwrt/luci`。用于 IPTV 组播代理（比老旧的 igmpproxy 更稳定），装好后在 LuCI「网络 - omcproxy」里配置。
