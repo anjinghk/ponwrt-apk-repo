@@ -68,25 +68,31 @@ jobs:
           ls -lh ponwrt-apk-aarch64_cortex-a53.tar.gz
           echo "PKG_COUNT=$(find out -name '*.apk' | wc -l)" >> "$GITHUB_ENV"
 
+      - name: 生成带日期的 tag
+        run: echo "RELEASE_TAG=apk-built-$(date +%Y%m%d)" >> "$GITHUB_ENV"
+
       - name: 发布到 Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: apk-aarch64_cortex-a53
-          name: PonWrt 可选插件 apk（aarch64_cortex-a53）
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: PonWrt 同源编译插件 apk（aarch64_cortex-a53）
           body: |
-            用 pbs05/ponwrt 同源码编译的 aarch64_cortex-a53 apk 包，含全部依赖与中文语言包。
-            适用于 Nokia XG-040G-MD 等 AN7581 设备（PonWrt 用 apk 包管理器）。
+            **用 pbs05/ponwrt 同一套源码编译**，与固件同源，无版本冲突风险。
+            架构 aarch64_cortex-a53，适用于 Nokia XG-040G-MD（AN7581）。
 
-            包含插件：AdGuard Home、Tailscale、WireGuard、Lucky（含反代/DDNS）。
+            包含插件（含各自依赖 + 中文语言包）：AdGuard Home、Tailscale、WireGuard、
+            Lucky（反代/DDNS）、omcproxy（IPTV 组播代理）。
             共 ${{ env.PKG_COUNT }} 个 apk 文件。
 
+            源码版本：见本次 workflow 日志首行 `PonWrt 源码: <commit>`。
+
             ## 安装
-            解压后把 apk 上传到路由器 /tmp，SSH 执行：
+            解压后把 apk 全部上传到路由器 /tmp，SSH 执行：
             ```
             cd /tmp
             apk add --allow-untrusted ./*.apk
+            /etc/init.d/rpcd reload && /etc/init.d/uhttpd reload
             ```
             网页「系统-软件包」直接上传第三方包会报 UNTRUSTED，请用上面的 SSH 命令。
-            装完执行 `/etc/init.d/rpcd reload && /etc/init.d/uhttpd reload` 刷新界面。
           files: ponwrt-apk-aarch64_cortex-a53.tar.gz
           fail_on_unmatched_files: true
