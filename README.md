@@ -19,7 +19,7 @@
 | WireGuard | 高性能 VPN | LuCI 协议界面自带中文 |
 | Lucky（大吉） | 反向代理、DDNS、IPv6 转发等 | ✅ 中文包 |
 | iStore 商店 | 图形化应用商店（仅商店本体，不含其它 iStore 应用） | ✅ 界面自带中文 |
-| omcproxy | IGMPv3 / MLDv2 组播代理（轻量级） | — |
+| omcproxy | IGMPv3 / MLDv2 组播代理（轻量级，比 igmpproxy 更稳） | ✅ LuCI 界面 + 中文包 |
 
 ## 怎么安装
 
@@ -60,4 +60,4 @@ Release 里的压缩包包含编译产出的**全部 apk**（目标插件 + 自�
 - 安装第三方插件后如出现问题，可 `apk del <包名>` 卸载。
 - Lucky 的预编译核心来自 `gdy666/luci-app-lucky`，按 `aarch64` 自动选 `arm64` 版本，与本机架构匹配。
 - iStore 商店来自 `linkease/istore`，只编译 `luci-app-store` 本体及其必需依赖（luci-lib-taskd / luci-lib-xterm / taskd），**不含** DDNSTO、易有云等其它 iStore 应用。商店装好后需在 LuCI 里出现「iStore」菜单才能用。
-- omcproxy 来自 ponwrt 主线自带包（`package/network/services/omcproxy`），是轻量组播代理。
+- omcproxy 主程序来自 ponwrt 主线自带包（`package/network/services/omcproxy`），LuCI 界面与中文包来自 `immortalwrt/luci`。用于 IPTV 组播代理（比老旧的 igmpproxy 更稳定），装好后在 LuCI「网络 - omcproxy」里配置。

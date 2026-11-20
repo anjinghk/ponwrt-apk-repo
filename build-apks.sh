@@ -57,13 +57,15 @@ CONFIG_PACKAGE_luci-i18n-lucky-zh-cn=y
 # iStore 商店本体（defconfig 会自动带出必要依赖 luci-lib-taskd/taskd，
 # 不选取 DDNSTO、易有云等 iStore 其它应用）
 CONFIG_PACKAGE_luci-app-store=y
-# omcproxy：IGMPv3/MLDv2 组播代理（ponwrt 主线自带）
+# omcproxy：IGMPv3/MLDv2 组播代理（ponwrt 主线自带）+ LuCI 界面 + 中文包
 CONFIG_PACKAGE_omcproxy=y
+CONFIG_PACKAGE_luci-app-omcproxy=y
+CONFIG_PACKAGE_luci-i18n-omcproxy-zh-cn=y
 EOF
 make defconfig
 
 echo "==> [3/5] 确认目标包已被选中（应全部 =y）"
-grep -E '^CONFIG_PACKAGE_(adguardhome|luci-app-adguardhome|luci-i18n-adguardhome-zh-cn|tailscale|luci-app-tailscale-community|luci-i18n-tailscale-community-zh-cn|luci-proto-wireguard|wireguard-tools|lucky|luci-app-lucky|luci-i18n-lucky-zh-cn|luci-app-store|omcproxy)=y' .config || true
+grep -E '^CONFIG_PACKAGE_(adguardhome|luci-app-adguardhome|luci-i18n-adguardhome-zh-cn|tailscale|luci-app-tailscale-community|luci-i18n-tailscale-community-zh-cn|luci-proto-wireguard|wireguard-tools|lucky|luci-app-lucky|luci-i18n-lucky-zh-cn|luci-app-store|omcproxy|luci-app-omcproxy|luci-i18n-omcproxy-zh-cn)=y' .config || true
 
 echo "==> [4/5] 下载源码包并完整编译"
 make -j"$JOBS" download
@@ -87,7 +89,8 @@ for key in adguardhome luci-app-adguardhome luci-i18n-adguardhome-zh-cn \
            tailscale luci-app-tailscale-community luci-i18n-tailscale-community-zh-cn \
            wireguard-tools luci-proto-wireguard \
            lucky luci-app-lucky luci-i18n-lucky-zh-cn \
-           omcproxy luci-app-store luci-lib-taskd luci-lib-xterm taskd; do
+           omcproxy luci-app-omcproxy luci-i18n-omcproxy-zh-cn \
+           luci-app-store luci-lib-taskd luci-lib-xterm taskd; do
     if ls "$SELF/out/${key}"-*.apk >/dev/null 2>&1; then
         echo "  OK   $key"
     else
